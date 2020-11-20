@@ -2,6 +2,7 @@
 This is an example on how to use the two player Wimblepong environment with one
 agent and the SimpleAI
 """
+import os, sys
 import matplotlib.pyplot as plt
 from random import randint
 import pickle
