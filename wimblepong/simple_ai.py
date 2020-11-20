@@ -25,7 +25,7 @@ class SimpleAi(object):
         Interface function that returns the action that the agent took based
         on the observation ob
         """
-        # Get the player id from the environmen
+        # Get the player id from the environment
         player = self.env.player1 if self.player_id == 1 else self.env.player2
         # Get own position in the game arena
         my_y = player.y
