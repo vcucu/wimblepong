@@ -87,7 +87,7 @@ def main(args):
         plt.show()
         print("Training finished.")
         data = pd.DataFrame({"episode": np.arange(len(reward_history)),
-                             "train_run_id": [args.train_run_id] * len(reward_history),
+                             "run_id": [args.train_run_id] * len(reward_history),
                              "algorithm": ["PG no baseline"] * len(reward_history),
                              "reward": reward_history})
     torch.save(agent.policy.state_dict(), "model_%s_%d.mdl" % ("PongEnv", args.train_run_id))
