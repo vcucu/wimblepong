@@ -4,3 +4,4 @@
 .idea/vcs.xml
 .idea/modules.xml
 .idea/wimblepong.iml
+*.pyc
