@@ -17,7 +17,7 @@ class Policy(torch.nn.Module):
         self.state_space = state_space
         self.action_space = action_space
         self.hidden = 64
-        self.fc1 = torch.nn.Linear(state_space, self.hidden)
+        self.fc1 = torch.nn.Linear(200*200*3, self.hidden) #TODO change when we preprocess the input
         self.fc2_mean = torch.nn.Linear(self.hidden, action_space)
         self.sigma = 0
         self.init_sigma()
@@ -60,17 +60,11 @@ class Agent(object):
         self.baseline = 20
 
         self.env = env
-        self.player_id = player_id # player id that determines on which side do we play on
+        self.player_id = player_id
         self.name = "DQN Agent"
 
     def get_name(self):
         return self.name
-
-    def get_action(self, ob = None):
-        pass
-
-    def get_train_action(self, state, epsilon, actions_num):
-        pass
 
     def episode_finished(self, episode_number):
         action_probs = torch.stack(self.action_probs, dim=0) \
@@ -78,10 +72,10 @@ class Agent(object):
         rewards = torch.stack(self.rewards, dim=0).to(self.train_device).squeeze(-1)
         self.states, self.action_probs, self.rewards = [], [], []
 
-        # (DONE) TODO: Compute discounted rewards (use the discount_rewards function)
+        # Compute discounted rewards (use the discount_rewards function)
         G = self.discount_rewards(rewards, self.gamma)
 
-        # (DONE) TODO: Compute the optimization term (T1)
+        # Compute the optimization term (T1)
         T = len(rewards)
         gammas = torch.tensor([self.gamma ** t for t in range(T)]).to(self.train_device)
         if self.reinforce_version == '1a':  # REINFORCE
@@ -92,10 +86,10 @@ class Agent(object):
             G = (G - torch.mean(G))/torch.std(G)
             loss = torch.sum(-gammas * (G) * action_probs)
 
-        # (DONE) TODO: Compute the gradients of loss w.r.t. network parameters (T1)
+        # Compute the gradients of loss w.r.t. network parameters
         loss.backward()
 
-        # (DONE) TODO: Update network parameters using self.optimizer and zero gradients (T1)
+        # Update network parameters using self.optimizer and zero gradients
         self.optimizer.step()
         self.optimizer.zero_grad()
 
@@ -103,20 +97,20 @@ class Agent(object):
             self.policy.sigma = self.sigma * (np.e ** ((-5 * 10 ** (-4)) * episode_number))
 
     def get_action(self, observation, evaluation=False ):
+        observation = observation.flatten()
         x = torch.from_numpy(observation).float().to(self.train_device)
 
-        # (DONE) TODO: Pass state x through the policy network (T1)
+        # Pass state x through the policy network
         actions_distribution = self.policy.forward(x)
 
-        # (DONE) TODO: Return mean if evaluation, else sample from the distribution
+        # Return mean if evaluation, else sample from the distribution
         if evaluation:
             action = actions_distribution.mean
         else:
             action = actions_distribution.sample()
 
-        # (DONE) TODO: Calculate the log probability of the action (T1)
+        # Calculate the log probability of the action
 
-        #print(action[0], actions_distribution)
         act_log_prob = actions_distribution.log_prob(action[0])
 
         return action, act_log_prob
@@ -135,7 +129,6 @@ class Agent(object):
         self.rewards.append(torch.Tensor([reward]))
 
     def reset(self):
-        # Nothing to done for now...
         return
 
 

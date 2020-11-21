@@ -46,7 +46,7 @@ def main(args):
 
     # Run actual training
 
-    for episode_number in range(args.episodes):
+    for episode_number in range(args.train_episodes):
         reward_sum, timesteps = 0, 0
         done = False
         # Reset the environment and observe the initial state
