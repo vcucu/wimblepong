@@ -17,8 +17,9 @@ class Policy(torch.nn.Module):
         self.state_space = state_space
         self.action_space = action_space
         self.hidden = 64
-        self.fc1 = torch.nn.Linear(200*200*3, self.hidden) #TODO change when we preprocess the input
-        self.fc2_mean = torch.nn.Linear(self.hidden, action_space)
+        # TODO change the input formate once we preprocess the input
+        self.fc1 = torch.nn.Linear(200*200*3, self.hidden)
+        self.fc2_mean = torch.nn.Linear(self.hidden, 1)
         self.sigma = 0
         self.init_sigma()
         self.init_weights()
@@ -49,6 +50,7 @@ class Agent(object):
     def __init__(self, env, policy, player_id=1):
 
         #Params
+        self.reinforce_version = "1c" #options: 1a, 1b, 1c corresponding to the version of REINFORCE algorithm
         self.train_device = "cpu"
         self.policy = policy.to(self.train_device)
         self.optimizer = torch.optim.Adam(policy.parameters(), lr=5e-3)
@@ -112,10 +114,9 @@ class Agent(object):
         # Calculate the log probability of the action
 
         act_log_prob = actions_distribution.log_prob(action[0])
-
         return action, act_log_prob
 
-    def discount_rewards(r, gamma):
+    def discount_rewards(self, r, gamma):
         discounted_r = torch.zeros_like(r)
         running_add = 0
         for t in reversed(range(0, r.size(-1))):
