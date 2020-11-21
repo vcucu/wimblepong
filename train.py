@@ -26,26 +26,21 @@ def main(args):
     # Create a Gym environment
     env = gym.make(args.env)
 
-    # Get dimensionalities of actions and observations
-
-
-    action_space_dim = 3
+    action_space_dim = 1
     # TODO: change when we preprocess the observation
     observation_space_dim = env.observation_space.shape
-
     sys.path.append(args.dir)
     from agents import DQN as model
 
     # Instantiate agent and its policy
     policy = model.Policy(observation_space_dim, action_space_dim)
-    agent = model.Agent(env = env, policy = policy)
+    agent = model.Agent(env=env, policy=policy)
 
     # Arrays to keep track of rewards
     reward_history, timestep_history = [], []
     average_reward_history = []
 
     # Run actual training
-
     for episode_number in range(args.train_episodes):
         reward_sum, timesteps = 0, 0
         done = False
@@ -67,7 +62,6 @@ def main(args):
             # Store total episode reward
             reward_sum += reward
             timesteps += 1
-
 
         print("Episode {} finished. Total reward: {:.3g} ({} timesteps)"
               .format(episode_number, reward_sum, timesteps))
@@ -93,24 +87,11 @@ def main(args):
         plt.show()
         print("Training finished.")
         data = pd.DataFrame({"episode": np.arange(len(reward_history)),
-                         "train_run_id": [args.train_run_id] * len(reward_history),
-                         "algorithm": ["PG no baseline"] * len(reward_history),
-                         "reward": reward_history})
+                             "train_run_id": [args.train_run_id] * len(reward_history),
+                             "algorithm": ["PG no baseline"] * len(reward_history),
+                             "reward": reward_history})
     torch.save(agent.policy.state_dict(), "model_%s_%d.mdl" % ("PongEnv", args.train_run_id))
     return data
-
-
-    # np.random.seed(123) #is this useful?
-
-    #env = gym.make(args.env)
-    #env.seed(321)
-
-    #episodes = args.train_episodes
-    #actions_num = 3
-    #sys.path.append(args.dir)
-    #from agents import DQN as a
-    #agent = a.Agent(env)  # This is not gonna work
-    #agent.train(episodes, env, actions_num)
 
 
 # Entry point of the script

@@ -2,11 +2,6 @@ import torch
 import torch.nn.functional as F
 import wimblepong
 import numpy as np
-import pandas as pd
-import gym
-import random
-import sys
-import matplotlib.pyplot as plt
 from torch.distributions import Normal
 
 
@@ -17,7 +12,7 @@ class Policy(torch.nn.Module):
         self.state_space = state_space
         self.action_space = action_space
         self.hidden = 64
-        # TODO change the input formate once we preprocess the input
+        # TODO change the input format once we preprocess the input
         self.fc1 = torch.nn.Linear(200*200*3, self.hidden)
         self.fc2_mean = torch.nn.Linear(self.hidden, 1)
         self.sigma = 0
@@ -99,6 +94,7 @@ class Agent(object):
             self.policy.sigma = self.sigma * (np.e ** ((-5 * 10 ** (-4)) * episode_number))
 
     def get_action(self, observation, evaluation=False ):
+        observation = self.preprocess(observation)
         observation = observation.flatten()
         x = torch.from_numpy(observation).float().to(self.train_device)
 
@@ -115,6 +111,10 @@ class Agent(object):
 
         act_log_prob = actions_distribution.log_prob(action[0])
         return action, act_log_prob
+
+    def preprocess(observation):
+        # TODO do stuffs (or alternatively we can implement it outside of this module)
+        return observation
 
     def discount_rewards(self, r, gamma):
         discounted_r = torch.zeros_like(r)
