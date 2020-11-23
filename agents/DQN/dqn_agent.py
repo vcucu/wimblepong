@@ -94,7 +94,7 @@ class Agent(object):
             self.policy.sigma = self.sigma * (np.e ** ((-5 * 10 ** (-4)) * episode_number))
 
     def get_action(self, observation, evaluation=False ):
-        observation = self.preprocess(observation)
+#        observation = self.preprocess(observation)
         observation = observation.flatten()
         x = torch.from_numpy(observation).float().to(self.train_device)
 

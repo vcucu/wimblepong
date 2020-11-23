@@ -14,7 +14,7 @@ def parse_args(args=sys.argv[1:]):
     parser.add_argument("--dir", type=str, help="Directory to agent 1 to be tested.", default="agents/PG")
     parser.add_argument("--env", type=str, default="WimblepongVisualSimpleAI-v0",
                         help="Environment to use")
-    parser.add_argument("--train_episodes", type=int, default=500,
+    parser.add_argument("--train_episodes", type=int, default=5000,
                         help="Number of episodes to train for")
     parser.add_argument("--print_stats", type=bool, default=True)
     parser.add_argument("--run_id", type=int, default=0)
@@ -45,17 +45,23 @@ def main(args):
     for episode_number in range(args.train_episodes):
         reward_sum, timesteps = 0, 0
         done = False
+        previous_observation = 0
         # Reset the environment and observe the initial state
         observation = env.reset()
 
+
         # Loop until the episode is over
         while not done:
+            # preprocess the observation, set input to network to be difference image
+            observation = agent.preprocess(observation)
+            x = observation - previous_observation if previous_observation is not None else np.zeros(agent.D)
+
             # Get action from the agent
-            action, action_probabilities = agent.get_action(observation)
+            action, action_probabilities = agent.get_action(x)
             previous_observation = observation
 
             # Perform the action on the environment, get new state and reward
-            observation, reward, done, info = env.step(action.detach().numpy())
+            observation, reward, done, info = env.step(action)
 
             # Store action's outcome (so that the agent can improve its policy)
             agent.store_outcome(previous_observation, action_probabilities, action, reward)
@@ -63,6 +69,7 @@ def main(args):
             # Store total episode reward
             reward_sum += reward
             timesteps += 1
+            agent.drs.append(reward)
 
         print("Episode {} finished. Total reward: {:.3g} ({} timesteps)"
               .format(episode_number, reward_sum, timesteps))
