@@ -1,135 +1,166 @@
-import torch
-import torch.nn.functional as F
-import wimblepong
+
 import numpy as np
-from torch.distributions import Normal
+from collections import namedtuple
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import random
 
 
-class Policy(torch.nn.Module):
-    def __init__(self, state_space, action_space):
-        super().__init__()
-        self.sigma_version = '2b' # options '1', '2a', '2b'
-        self.state_space = state_space
-        self.action_space = action_space
-        self.hidden = 64
-        # TODO change the input format once we preprocess the input
-        self.fc1 = torch.nn.Linear(200*200*3, self.hidden)
-        self.fc2_mean = torch.nn.Linear(self.hidden, 1)
-        self.sigma = 0
-        self.init_sigma()
-        self.init_weights()
-
-    def init_sigma(self):
-        if self.sigma_version == '1':
-            self.sigma = torch.tensor([np.sqrt(5.)], dtype=torch.float32)
-        elif self.sigma_version == '2a':
-            self.sigma = torch.tensor([np.sqrt(10.)], dtype=torch.float32)
-        elif self.sigma_version == '2b':
-            self.sigma = torch.nn.Parameter(torch.tensor([np.sqrt(10.)], dtype=torch.float32))
-
-    def init_weights(self):
-        for m in self.modules():
-            if type(m) is torch.nn.Linear:
-                torch.nn.init.normal_(m.weight)
-                torch.nn.init.zeros_(m.bias)
+"""class CartpoleDQN(nn.Module):
+    def __init__(self, state_space_dim, action_space_dim, hidden=12):
+        super(CartpoleDQN, self).__init__()
+        self.hidden = hidden
+        self.fc1 = nn.Linear(state_space_dim, hidden)
+        self.fc2 = nn.Linear(hidden, action_space_dim)
 
     def forward(self, x):
         x = self.fc1(x)
         x = F.relu(x)
-        action_mean = self.fc2_mean(x)
-        sigma = self.sigma
-        return Normal(action_mean, sigma)
+        x = self.fc2(x)
+        return x"""
 
 
-class Agent(object):
-    def __init__(self, env, policy, player_id=1):
+class PongDQN(nn.Module):
+    def __init__(self, state_space_dim, action_space_dim, hidden=100, batch_size =64):
+        super(PongDQN, self).__init__()
+        inputs = 100*100 #200 * 200 * 3 #todo change
+        state_space_dim = inputs#batch_size * inputs *hidden
+        self.fc1 = nn.Linear(state_space_dim, hidden)
+        self.fc2 = nn.Linear(hidden, hidden)
+        self.fc3 = nn.Linear(hidden, action_space_dim)
 
-        #Params
-        self.reinforce_version = "1c" #options: 1a, 1b, 1c corresponding to the version of REINFORCE algorithm
-        self.train_device = "cpu"
-        self.policy = policy.to(self.train_device)
-        self.optimizer = torch.optim.Adam(policy.parameters(), lr=5e-3)
-        self.gamma = 0.98
-        self.states = []
-        self.action_probs = []
-        self.rewards = []
-        self.sigma = self.policy.sigma
-        self.baseline = 20
+    def forward(self, x):
+        x = x.view(-1, 10000)
+        #print("x shape", x.shape)
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        return self.fc3(x)
 
-        self.env = env
-        self.player_id = player_id
-        self.name = "DQN Agent"
 
-    def get_name(self):
-        return self.name
+class DQNAgent(object):
+    def __init__(self, env_name, state_space, n_actions, replay_buffer_size=50000,
+                 batch_size=32, hidden_size=12, gamma=0.98):
+        self.env_name = env_name
+        self.n_actions = n_actions
+        self.state_space_dim = state_space
+        self.policy_net = PongDQN(state_space, n_actions, hidden_size, batch_size)
+        self.target_net = PongDQN(state_space, n_actions, hidden_size, batch_size)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.target_net.eval()
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=5e-4)
+        self.memory = ReplayMemory(replay_buffer_size)
+        self.batch_size = batch_size
+        self.gamma = gamma
 
-    def episode_finished(self, episode_number):
-        action_probs = torch.stack(self.action_probs, dim=0) \
-            .to(self.train_device).squeeze(-1)
-        rewards = torch.stack(self.rewards, dim=0).to(self.train_device).squeeze(-1)
-        self.states, self.action_probs, self.rewards = [], [], []
+    def update_network(self, updates=1):
 
-        # Compute discounted rewards (use the discount_rewards function)
-        G = self.discount_rewards(rewards, self.gamma)
+        for _ in range(updates):
+            self._do_network_update()
 
-        # Compute the optimization term (T1)
-        T = len(rewards)
-        gammas = torch.tensor([self.gamma ** t for t in range(T)]).to(self.train_device)
-        if self.reinforce_version == '1a':  # REINFORCE
-            loss = torch.sum(-gammas * G * action_probs)
-        elif self.reinforce_version == '1b':  # REINFORCE with baseline
-            loss = torch.sum(-gammas * (G - self.baseline) * action_probs)
-        elif self.reinforce_version == '1c':  # REINFORCE with normalized discounted rewards
-            G = (G - torch.mean(G))/torch.std(G)
-            loss = torch.sum(-gammas * (G) * action_probs)
+    def _do_network_update(self):
+        if len(self.memory) < self.batch_size:
+            return
+        transitions = self.memory.sample(self.batch_size)
+        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
+        # detailed explanation). This converts batch-array of Transitions
+        # to Transition of batch-arrays.
+        batch = Transition(*zip(*transitions))
 
-        # Compute the gradients of loss w.r.t. network parameters
-        loss.backward()
+        # Compute a mask of non-final states and concatenate the batch elements
+        # (a final state would've been the one after which simulation ended)
+        non_final_mask = 1-torch.tensor(batch.done, dtype=torch.uint8)
+        non_final_mask = non_final_mask.type(torch.bool)
+        non_final_next_states = [s for nonfinal, s in zip(non_final_mask,
+                                     batch.next_state) if nonfinal > 0]
+        non_final_next_states = torch.stack(non_final_next_states)
+        state_batch = torch.stack(batch.state)
+        action_batch = torch.cat(batch.action)
+        reward_batch = torch.cat(batch.reward)
 
-        # Update network parameters using self.optimizer and zero gradients
-        self.optimizer.step()
+        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+        # columns of actions taken. These are the actions which would've been taken
+        # for each batch state according to policy_net
+        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+
+        # Compute V(s_{t+1}) for all next states.
+        # Expected values of actions for non_final_next_states are computed based
+        # on the "older" target_net; selecting their best reward with max(1)[0].
+        # This is merged based on the mask, such that we'll have either the expected
+        # state value or 0 in case the state was final.
+        next_state_values = torch.zeros(self.batch_size)
+        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
+
+        # Task 4: TODO: Compute the expected Q values
+        #expected_state_action_values = 0
+        expected_state_action_values = reward_batch + self.gamma * next_state_values
+
+        # Compute Huber loss
+        loss = F.smooth_l1_loss(state_action_values.squeeze(),
+                                expected_state_action_values)
+
+        # Optimize the model
         self.optimizer.zero_grad()
+        loss.backward()
+        for param in self.policy_net.parameters():
+            param.grad.data.clamp_(-1e-1, 1e-1)
+        self.optimizer.step()
 
-        if self.policy.sigma_version == '2a':
-            self.policy.sigma = self.sigma * (np.e ** ((-5 * 10 ** (-4)) * episode_number))
-
-    def get_action(self, observation, evaluation=False ):
-#        observation = self.preprocess(observation)
-        observation = observation.flatten()
-        x = torch.from_numpy(observation).float().to(self.train_device)
-
-        # Pass state x through the policy network
-        actions_distribution = self.policy.forward(x)
-
-        # Return mean if evaluation, else sample from the distribution
-        if evaluation:
-            action = actions_distribution.mean
+    def get_action(self, state, epsilon=0.05):
+        sample = random.random()
+        if sample > epsilon:
+            with torch.no_grad():
+                state = torch.from_numpy(state).float()
+                q_values = self.policy_net(state)
+                return torch.argmax(q_values).item()
         else:
-            action = actions_distribution.sample()
+            return random.randrange(self.n_actions)
 
-        # Calculate the log probability of the action
+    def update_target_network(self):
+        self.target_net.load_state_dict(self.policy_net.state_dict())
 
-        act_log_prob = actions_distribution.log_prob(action[0])
-        return action, act_log_prob
-
-    def preprocess(observation):
-        # TODO do stuffs (or alternatively we can implement it outside of this module)
-        return observation
-
-    def discount_rewards(self, r, gamma):
-        discounted_r = torch.zeros_like(r)
-        running_add = 0
-        for t in reversed(range(0, r.size(-1))):
-            running_add = running_add * gamma + r[t]
-            discounted_r[t] = running_add
-        return discounted_r
-
-    def store_outcome(self, observation, action_prob, action_taken, reward):
-        self.states.append(observation)
-        self.action_probs.append(action_prob)
-        self.rewards.append(torch.Tensor([reward]))
-
-    def reset(self):
-        return
+    def store_transition(self, state, action, next_state, reward, done):
+        action = torch.Tensor([[action]]).long()
+        reward = torch.tensor([reward], dtype=torch.float32)
+        next_state = torch.from_numpy(next_state).float()
+        state = torch.from_numpy(state).float()
+        self.memory.push(state, action, next_state, reward, done)
 
 
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward', 'done'))
+
+
+class ReplayMemory(object):
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.memory = []
+        self.position = 0
+
+    def push(self, *args):
+        """Saves a transition."""
+        if len(self.memory) < self.capacity:
+            self.memory.append(None)
+        self.memory[self.position] = Transition(*args)
+        self.position = (self.position + 1) % self.capacity
+
+    def sample(self, batch_size):
+        return random.sample(self.memory, batch_size)
+
+    def __len__(self):
+        return len(self.memory)
+
+
+#class DQN(nn.Module):
+#    def __init__(self, state_space_dim, action_space_dim, hidden=32):
+#        super(DQN, self).__init__()
+#        self.hidden = hidden
+#        self.fc1 = nn.Linear(state_space_dim, hidden)
+#       self.fc2 = nn.Linear(hidden, action_space_dim)
+#
+#   def forward(self, x):
+#        x = self.fc1(x)
+#        x = F.relu(x)
+#        x = self.fc2(x)
+#        return x

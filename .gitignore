@@ -5,3 +5,6 @@
 .idea/modules.xml
 .idea/wimblepong.iml
 *.pyc
+*.0
+python
+python
