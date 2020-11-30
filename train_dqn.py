@@ -17,11 +17,10 @@ def parse_args(args=sys.argv[1:]):
     parser.add_argument("--dir", type=str, help="Directory to agent 1 to be tested.", default="agents/PG")
     parser.add_argument("--env", type=str, default="WimblepongVisualSimpleAI-v0",
                         help="Environment to use")
-    parser.add_argument("--train_episodes", type=int, default=20000,
+    parser.add_argument("--train_episodes", type=int, default=100000,
                         help="Number of episodes to train for")
     parser.add_argument("--print_stats", type=bool, default=True)
     parser.add_argument("--run_id", type=int, default=0)
-
     return parser.parse_args(args)
 
 
@@ -39,7 +38,7 @@ def main(args):
     env = gym.make(args.env)
 
     TARGET_UPDATE = 4
-    glie_a = 100
+    glie_a = 2222
     num_episodes = args.train_episodes
     hidden = 32
     gamma = 0.99
@@ -59,7 +58,6 @@ def main(args):
 
     cumulative_rewards = []
     for ep in range(num_episodes):
-
         # Initialize the environment and state
         state = env.reset()
         state = preprocess(state)
@@ -68,20 +66,12 @@ def main(args):
         cum_reward = 0
         while not done:
             # Select and perform an action
-
             action = agent.get_action(state, eps)
             next_state, reward, done, _ = env.step(action)
             next_state = preprocess(next_state)
             cum_reward += reward
 
-            # Task 1: Update the Q-values
-            # agent.single_update(state, action, next_state, reward, done)
-
-            # Task 2:  Store transition and batch-update Q-values
-            #agent.store_transition(state, action, next_state, reward, done)
-            #agent.update_estimator()
-
-            # Task 4: Update the DQN
+            # Update the DQN
             agent.store_transition(state, action, next_state, reward, done)
             agent.update_network()
 
@@ -110,30 +100,23 @@ def main(args):
 
 
 
-
-
 def plot_rewards(rewards,agent):
-    # plot the policy
-    discr = 64
-    x_min, x_max = -2.4, 2.4
-    th_min, th_max = -0.3, 0.3
-    num_of_actions = 2
+    plt.figure(2)
+    plt.clf()
+    rewards_t = torch.tensor(rewards, dtype=torch.float)
+    plt.title('Training...')
+    plt.xlabel('Episode')
+    plt.ylabel('Cumulative reward')
+    plt.grid(True)
+    plt.plot(rewards_t.numpy())
+    # Take 100 episode averages and plot them too
+    if len(rewards_t) >= 100:
+        means = rewards_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
 
-    # Create discretization grid
-    x_grid = np.linspace(x_min, x_max, discr)
-    th_grid = np.linspace(th_min, th_max, discr)
-    q_grid = np.zeros((discr, discr))
-
-    # Construct policy
-    for x in x_grid:
-        for th in th_grid:
-            x_d, th_d = discretize(x, th, x_grid, th_grid)
-            state = np.array([x, 0, th, 0])
-            action = agent.get_action(state)
-            q_grid[th_d][x_d] = action
-
-    seaborn.heatmap(q_grid)
-    plt.title("Policy visualized over x-location(x-axis) and angle theta(y-axis)")
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    plt.savefig('train_plot.png')
     plt.show()
 
 def find_nearest(array, value):

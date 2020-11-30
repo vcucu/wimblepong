@@ -7,26 +7,11 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 
-
-"""class CartpoleDQN(nn.Module):
-    def __init__(self, state_space_dim, action_space_dim, hidden=12):
-        super(CartpoleDQN, self).__init__()
-        self.hidden = hidden
-        self.fc1 = nn.Linear(state_space_dim, hidden)
-        self.fc2 = nn.Linear(hidden, action_space_dim)
-
-    def forward(self, x):
-        x = self.fc1(x)
-        x = F.relu(x)
-        x = self.fc2(x)
-        return x"""
-
-
 class PongDQN(nn.Module):
     def __init__(self, state_space_dim, action_space_dim, hidden=100, batch_size =64):
         super(PongDQN, self).__init__()
-        inputs = 100*100 #200 * 200 * 3 #todo change
-        state_space_dim = inputs#batch_size * inputs *hidden
+        inputs = 100*100
+        state_space_dim = inputs # batch_size * inputs *hidden
         self.fc1 = nn.Linear(state_space_dim, hidden)
         self.fc2 = nn.Linear(hidden, hidden)
         self.fc3 = nn.Linear(hidden, action_space_dim)
@@ -40,8 +25,8 @@ class PongDQN(nn.Module):
 
 
 class DQNAgent(object):
-    def __init__(self, env_name, state_space, n_actions, replay_buffer_size=50000,
-                 batch_size=32, hidden_size=12, gamma=0.98):
+    def __init__(self, env_name, state_space, n_actions, replay_buffer_size,
+                 batch_size, hidden_size, gamma):
         self.env_name = env_name
         self.n_actions = n_actions
         self.state_space_dim = state_space
@@ -55,7 +40,6 @@ class DQNAgent(object):
         self.gamma = gamma
 
     def update_network(self, updates=1):
-
         for _ in range(updates):
             self._do_network_update()
 
@@ -151,16 +135,3 @@ class ReplayMemory(object):
     def __len__(self):
         return len(self.memory)
 
-
-#class DQN(nn.Module):
-#    def __init__(self, state_space_dim, action_space_dim, hidden=32):
-#        super(DQN, self).__init__()
-#        self.hidden = hidden
-#        self.fc1 = nn.Linear(state_space_dim, hidden)
-#       self.fc2 = nn.Linear(hidden, action_space_dim)
-#
-#   def forward(self, x):
-#        x = self.fc1(x)
-#        x = F.relu(x)
-#        x = self.fc2(x)
-#        return x
