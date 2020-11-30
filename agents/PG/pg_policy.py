@@ -8,7 +8,7 @@ from torch.distributions import Normal
 class Policy(torch.nn.Module):
     def __init__(self, state_space, action_space):
         super().__init__()
-        self.H = 200  # number of hidden layer neurons
+        self.H = 50  # number of hidden layer neurons
         self.batch_size = 50  # every how many episodes to do a param update?
         self.learning_rate = 1e-4
         self.gamma = 0.99  # discount factor for reward
@@ -16,7 +16,7 @@ class Policy(torch.nn.Module):
         self.resume = False  # resume from previous checkpoint?
         self.render = False
 
-        self.D = 100 * 100  # input dimensionality: 80x80 grid
+        self.D = 50 *50  # input dimensionality: 50x50 grid
         self.init_model_wights()
 
     def sigmoid(self,x):
