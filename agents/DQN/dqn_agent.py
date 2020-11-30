@@ -1,4 +1,3 @@
-
 import numpy as np
 from collections import namedtuple
 import torch
@@ -7,18 +6,18 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 
+
 class PongDQN(nn.Module):
-    def __init__(self, state_space_dim, action_space_dim, hidden=100, batch_size =64):
+    def __init__(self, state_space_dim, action_space_dim, hidden=100, batch_size=64):
         super(PongDQN, self).__init__()
-        inputs = 100*100
-        state_space_dim = inputs # batch_size * inputs *hidden
+        self.inputs = state_space_dim
+        state_space_dim = self.inputs  # batch_size * inputs *hidden
         self.fc1 = nn.Linear(state_space_dim, hidden)
         self.fc2 = nn.Linear(hidden, hidden)
         self.fc3 = nn.Linear(hidden, action_space_dim)
 
     def forward(self, x):
-        x = x.view(-1, 10000)
-        #print("x shape", x.shape)
+        x = x.view(-1, self.inputs)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         return self.fc3(x)
@@ -54,10 +53,10 @@ class DQNAgent(object):
 
         # Compute a mask of non-final states and concatenate the batch elements
         # (a final state would've been the one after which simulation ended)
-        non_final_mask = 1-torch.tensor(batch.done, dtype=torch.uint8)
+        non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8)
         non_final_mask = non_final_mask.type(torch.bool)
         non_final_next_states = [s for nonfinal, s in zip(non_final_mask,
-                                     batch.next_state) if nonfinal > 0]
+                                                          batch.next_state) if nonfinal > 0]
         non_final_next_states = torch.stack(non_final_next_states)
         state_batch = torch.stack(batch.state)
         action_batch = torch.cat(batch.action)
@@ -76,8 +75,7 @@ class DQNAgent(object):
         next_state_values = torch.zeros(self.batch_size)
         next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
 
-        # Task 4: TODO: Compute the expected Q values
-        #expected_state_action_values = 0
+        # Compute the expected Q values
         expected_state_action_values = reward_batch + self.gamma * next_state_values
 
         # Compute Huber loss
@@ -134,4 +132,3 @@ class ReplayMemory(object):
 
     def __len__(self):
         return len(self.memory)
-
