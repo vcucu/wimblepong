@@ -35,7 +35,7 @@ def main(args):
 
     # Instantiate agent and its policy
     policy = model.Policy(50*50, action_space_dim)
-    agent = model.Agent(env=env, policy=policy)
+    agent = model.Agent(env=env, policy=policy,state_space= (50,50))
 
     # Arrays to keep track of rewards
     reward_history, timestep_history = [], []
@@ -52,10 +52,10 @@ def main(args):
         # Loop until the episode is over
         while not done:
             # Get action from the agent
-            action, action_probabilities = agent.get_action(previous_state)
+            action, action_probabilities = agent.get_action(state)
 
             # Perform the action on the environment, get new state and reward
-            next_state, reward, done, info = env.step(action.detach().numpy())
+            next_state, reward, done, info = env.step(action)
 
             next_state, previous_state = agent.preprocess(next_state, previous_state)
 
