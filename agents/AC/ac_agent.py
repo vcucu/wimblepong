@@ -39,13 +39,6 @@ class Policy(torch.nn.Module):
         out = self.sigmoid(value)
         return normal_dist, out
 
-    # def policy_forward(self, x, model_type, model):
-    #     h = np.dot(model['W1_' + model_type], x) + model['b1_' + model_type]
-    #     h[h < 0] = 0  # ReLU nonlinearity
-    #     out = np.dot(model['W2_' + model_type], h) + model['b2_' + model_type]
-    #     if model_type == 'policy':
-    #         out = sigmoid(out)
-    #     return out, h  # return probability of taking action 2, and hidden state
 
 
 class Agent(object):
@@ -100,7 +93,7 @@ class Agent(object):
         x = torch.from_numpy(observation).float().to(self.train_device)
 
         # TODO: Pass state x through the policy network (T1) -- DONE
-        aprob, value = self.policy.forward(x, self.variance)
+        _, aprob = self.policy.forward(x, self.variance)
 
         action = 1 if np.random.uniform() < aprob else 2  # roll the dice!
         return action
