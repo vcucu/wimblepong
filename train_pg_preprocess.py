@@ -26,7 +26,7 @@ def main(args):
     # Create a Gym environment
     env = gym.make(args.env)
 
-    action_space_dim = 1
+    action_space_dim = 3
     # TODO: change when we preprocess the observation
     observation_space_dim = 50*50
     sys.path.append(args.dir)
@@ -40,7 +40,7 @@ def main(args):
     # Arrays to keep track of rewards
     reward_history, timestep_history = [], []
     average_reward_history = []
-
+    print_things = True
     # Run actual training
     for episode_number in range(args.train_episodes):
         reward_sum, timesteps = 0, 0
@@ -59,15 +59,15 @@ def main(args):
 
             next_state, previous_state = agent.preprocess(next_state, previous_state)
 
-
             # Store action's outcome (so that the agent can improve its policy)
             agent.store_outcome(previous_state, action_probabilities, action, reward)
 
             # Store total episode reward
             reward_sum += reward
             timesteps += 1
+            agent.drs.append(reward)
 
-        if 1==1:
+        if print_things:
             print("Episode {} finished. Total reward: {:.3g} ({} timesteps)"
                   .format(episode_number, reward_sum, timesteps))
 
