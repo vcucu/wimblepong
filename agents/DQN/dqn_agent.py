@@ -18,9 +18,8 @@ class PongDQN(nn.Module):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.inputs = state_space_dim[0] * state_space_dim[1]
 
-        # state_space_dim[0] (3)
-        self.conv1 = nn.Conv2d(1, hidden, kernel_size=5, stride=1)
-        self.conv2 = nn.Conv2d(hidden, 64, kernel_size=5, stride=1)
+        self.conv1 = nn.Conv2d(3, hidden, kernel_size=5, stride=1)
+        self.conv2 = nn.Conv2d(hidden, 32, kernel_size=5, stride=1)
         self.fc1 = torch.nn.Linear(self.linear_input_dim, hidden)
         self.fc2 = torch.nn.Linear(hidden, action_space_dim)
         self.initialize()
@@ -36,7 +35,7 @@ class PongDQN(nn.Module):
         a = self.conv2d_dims(a, 5, 1)
         b = self.conv2d_dims(50, 5, 1)
         b = self.conv2d_dims(b, 5, 1)
-        return a * b * 64
+        return a * b * 32
 
     def conv2d_dims(self, input, kernel_size, stride):
         return (input - (kernel_size - 1) - 1) // stride + 1
@@ -51,25 +50,34 @@ class PongDQN(nn.Module):
 
 
 class DQNAgent(object):
-    def __init__(self, env_name, state_space, n_actions, replay_buffer_size,
-                 batch_size, hidden_size, gamma):
+    def __init__(self):
         self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
-
-        self.env_name = env_name
-        self.n_actions = n_actions
-        self.state_space_dim = state_space
-        self.policy_net = PongDQN(state_space, n_actions, hidden_size, batch_size)
-        self.target_net = PongDQN(state_space, n_actions, hidden_size, batch_size)
+        self.name = "AVe"  # A-letta & Ve-ronika hehe
+        self.n_actions = 3
+        self.state_space = (50, 50)
+        self.batch_size = 256
+        self.hidden = 64
+        self.policy_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
+        self.target_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=5e-4)
-        self.memory = ReplayMemory(replay_buffer_size)
-        self.batch_size = batch_size
-        self.gamma = gamma
+        self.memory = ReplayMemory(50000)
+        #self.glie_a = 5555
+        self.gamma = 0.99
+        self.prev_1 = np.zeros((50, 50))
+        self.prev_2 = np.zeros((50, 50))
+
+    def get_name(self):
+        return self.name
+
+    def reset(self):
+        self.prev_1 = np.zeros((50, 50))
+        self.prev_2 = np.zeros((50, 50))
 
     def update_network(self, updates=1):
-        for _ in range(updates):
-            self._do_network_update()
+            for _ in range(updates):
+                self._do_network_update()
 
     def _do_network_update(self):
         if len(self.memory) < self.batch_size:
@@ -86,11 +94,11 @@ class DQNAgent(object):
         reward_batch = torch.cat(batch.reward)
 
         state_action_values = self.policy_net(state_batch
-                                              .reshape(-1, 1, 50, 50)).gather(1, action_batch)
+                                              .reshape(-1, 3, 50, 50)).gather(1, action_batch)
 
         next_state_values = torch.zeros(self.batch_size).to(self.device)
         next_state_values[non_final_mask.bool()] = self.target_net(non_final_next_states
-                                                                   .reshape(-1, 1, 50, 50)).max(1)[0].detach()
+                                                                   .reshape(-1, 3, 50, 50)).max(1)[0].detach()
 
         # Compute the expected Q values
         expected_state_action_values = reward_batch + self.gamma * next_state_values
@@ -106,11 +114,12 @@ class DQNAgent(object):
             param.grad.data.clamp_(-1e-1, 1e-1)
         self.optimizer.step()
 
-    def get_action(self, state, epsilon=0.05):
+    def get_action(self, state, epsilon=-1):
+        state, _ = self.preprocess(state)
         sample = random.random()
         if sample > epsilon:
             with torch.no_grad():
-                state = torch.from_numpy(state).float()
+                state = torch.from_numpy(state.reshape(-1, 3, 50, 50)).float()
                 q_values = self.policy_net(state)
                 return torch.argmax(q_values).item()
         else:
@@ -122,9 +131,49 @@ class DQNAgent(object):
     def store_transition(self, state, action, next_state, reward, done):
         action = torch.Tensor([[action]]).long()
         reward = torch.tensor([reward], dtype=torch.float32)
-        next_state = torch.from_numpy(next_state).float()
-        state = torch.from_numpy(state).float()
-        self.memory.push(state, action, next_state, reward, done)
+        stacked_state, state = self.preprocess(state)
+        stacked_next_state, next_state = self.preprocess(next_state, state, self.prev_1)
+
+        self.prev_2 = self.prev_1
+        self.prev_1 = state
+
+        #next_state = torch.from_numpy(next_state).float()  # are the two lines needed?
+        #state = torch.from_numpy(state).float()  # are these two lines needed?
+        self.memory.push(stacked_state, action, stacked_next_state, reward, done)
+
+    def preprocess(self, observation, prev_1=None, prev_2=None):
+        observation = observation[::4, ::4, 0]  # downsample by factor of 4
+        observation[observation == 33] = 0  # erase background
+        observation[(observation == 75) | (observation == 202) | (observation == 255)] = 1
+
+        # show after color encoding
+        # plt.imshow(observation)
+        # plt.colorbar()
+        # plt.title("Observation after downsampling and color encoding")
+        # plt.show()
+        # memorize the previous state
+        # subtract_next = observation
+        # previous_observation = np.asarray(previous_observation)
+        # if previous_observation.any():
+        #    observation = observation - 0.5 * previous_observation
+        # observation = observation.astype(np.float)
+        # Show after substraction
+        # plt.imshow(observation)
+        # plt.colorbar()
+        # plt.title("Observation after subtraction of previous image")
+        # plt.show()
+
+        if prev_1 is None:
+            prev_1 = self.prev_1
+        if prev_2 is None:
+            prev_2 = self.prev_2
+
+        observation = torch.Tensor(observation)
+        stacked = np.concatenate((self.prev_1, self.prev_2, observation), axis=-1)
+        stacked = torch.from_numpy(stacked).float().unsqueeze(0)
+        #stacked = stacked.transpose(1, 3)
+        #print("4", stacked.shape)
+        return stacked, observation
 
 
 class ReplayMemory(object):
