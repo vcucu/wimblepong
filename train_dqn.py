@@ -1,10 +1,9 @@
 import argparse
 import sys
 import gym
-
-import wimblepong
+import time
 import numpy as np
-import pandas as pd
+import wimblepong
 import torch
 import matplotlib.pyplot as plt
 
@@ -38,39 +37,41 @@ def main(args):
     for ep in range(num_episodes):
         # Initialize the environment and state
         state = env.reset()
-
-        #state, previous_state = preprocess(state)
-
         done = False
         eps = glie_a / (glie_a + ep)
         cum_reward = 0
         timesteps = 0
+        #start = time.time()
         while not done:
             timesteps += 1
             total_timesteps += 1
+
             # Select and perform an action
             action = agent.get_action(state, eps)
             next_state, reward, done, _ = env.step(action)
-            #next_state, previous_state = preprocess(next_state, previous_state)
             cum_reward += reward
 
             # Update the DQN
             agent.store_transition(state, action, next_state, reward, done)
+            #net_update_start = time.time()
             agent.update_network()
+            #net_update_end = time.time()
+            #print("This network update took", net_update_end - net_update_start)
 
             # Move to the next state
             state = next_state
+
+        #end = time.time()
+        #print("This episode took", end - start)
 
         print("Episode:", ep, "Reward: ", cum_reward, "epsilon:", eps, "timesteps:", timesteps)
         cumulative_rewards.append(cum_reward)
 
         # Update the target network, copying all weights and biases in DQN
-        # Uncomment for Task 4
         if ep % TARGET_UPDATE == 0:
             agent.update_target_network()
 
         # Save the policy
-        # Uncomment for Task 4
         if ep % 1000 == 0:
             torch.save(agent.policy_net.state_dict(),
                        "weights_%s_%d.mdl" % ("PongEnv", ep))

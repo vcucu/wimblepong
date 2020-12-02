@@ -18,8 +18,8 @@ class PongDQN(nn.Module):
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
         self.inputs = state_space_dim[0] * state_space_dim[1]
 
-        self.conv1 = nn.Conv2d(3, hidden, kernel_size=5, stride=1)
-        self.conv2 = nn.Conv2d(hidden, 32, kernel_size=5, stride=1)
+        self.conv1 = nn.Conv2d(3, hidden, kernel_size=5, stride=2)
+        self.conv2 = nn.Conv2d(hidden, 32, kernel_size=5, stride=2)
         self.fc1 = torch.nn.Linear(self.linear_input_dim, hidden)
         self.fc2 = torch.nn.Linear(hidden, action_space_dim)
         self.initialize()
@@ -31,10 +31,10 @@ class PongDQN(nn.Module):
         torch.nn.init.xavier_uniform_(self.fc2.weight)
 
     def linear_input(self, state_space_dim):
-        a = self.conv2d_dims(50, 5, 1)
-        a = self.conv2d_dims(a, 5, 1)
-        b = self.conv2d_dims(50, 5, 1)
-        b = self.conv2d_dims(b, 5, 1)
+        a = self.conv2d_dims(50, 5, 2)
+        a = self.conv2d_dims(a, 5, 2)
+        b = self.conv2d_dims(50, 5, 2)
+        b = self.conv2d_dims(b, 5, 2)
         return a * b * 32
 
     def conv2d_dims(self, input, kernel_size, stride):
@@ -56,14 +56,13 @@ class DQNAgent(object):
         self.n_actions = 3
         self.state_space = (50, 50)
         self.batch_size = 256
-        self.hidden = 64
+        self.hidden = 16
         self.policy_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
         self.target_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=5e-4)
         self.memory = ReplayMemory(50000)
-        #self.glie_a = 5555
         self.gamma = 0.99
         self.prev_1 = np.zeros((50, 50))
         self.prev_2 = np.zeros((50, 50))
@@ -88,10 +87,10 @@ class DQNAgent(object):
         non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8)
         non_final_next_states = [s for nonfinal, s in zip(non_final_mask,
                                                           batch.next_state) if nonfinal > 0]
-        non_final_next_states = torch.stack(non_final_next_states)
-        state_batch = torch.stack(batch.state)
-        action_batch = torch.cat(batch.action)
-        reward_batch = torch.cat(batch.reward)
+        non_final_next_states = torch.stack(non_final_next_states).to(self.device)
+        state_batch = torch.stack(batch.state).to(self.device)
+        action_batch = torch.cat(batch.action).to(self.device)
+        reward_batch = torch.cat(batch.reward).to(self.device)
 
         state_action_values = self.policy_net(state_batch
                                               .reshape(-1, 3, 50, 50)).gather(1, action_batch)
@@ -99,14 +98,12 @@ class DQNAgent(object):
         next_state_values = torch.zeros(self.batch_size).to(self.device)
         next_state_values[non_final_mask.bool()] = self.target_net(non_final_next_states
                                                                    .reshape(-1, 3, 50, 50)).max(1)[0].detach()
-
         # Compute the expected Q values
         expected_state_action_values = reward_batch + self.gamma * next_state_values
 
         # Compute Huber loss
         loss = F.smooth_l1_loss(state_action_values.squeeze(),
                                 expected_state_action_values)
-
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
@@ -119,7 +116,8 @@ class DQNAgent(object):
         sample = random.random()
         if sample > epsilon:
             with torch.no_grad():
-                state = torch.from_numpy(state.reshape(-1, 3, 50, 50)).float()
+                state = torch.reshape(state, (-1, 3, 50, 50))
+                #state = torch.from_numpy(state.reshape(-1, 3, 50, 50)).float()
                 q_values = self.policy_net(state)
                 return torch.argmax(q_values).item()
         else:
@@ -137,8 +135,6 @@ class DQNAgent(object):
         self.prev_2 = self.prev_1
         self.prev_1 = state
 
-        #next_state = torch.from_numpy(next_state).float()  # are the two lines needed?
-        #state = torch.from_numpy(state).float()  # are these two lines needed?
         self.memory.push(stacked_state, action, stacked_next_state, reward, done)
 
     def preprocess(self, observation, prev_1=None, prev_2=None):
@@ -168,11 +164,9 @@ class DQNAgent(object):
         if prev_2 is None:
             prev_2 = self.prev_2
 
-        observation = torch.Tensor(observation)
         stacked = np.concatenate((self.prev_1, self.prev_2, observation), axis=-1)
         stacked = torch.from_numpy(stacked).float().unsqueeze(0)
-        #stacked = stacked.transpose(1, 3)
-        #print("4", stacked.shape)
+
         return stacked, observation
 
 
