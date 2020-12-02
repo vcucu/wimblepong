@@ -6,26 +6,55 @@ import torch.optim as optim
 import torch.nn.functional as F
 import random
 
+Transition = namedtuple('Transition',
+                        ('state', 'action', 'next_state', 'reward', 'done'))
+
 
 class PongDQN(nn.Module):
-    def __init__(self, state_space_dim, action_space_dim, hidden=100, batch_size=64):
+    def __init__(self, state_space_dim, action_space_dim, hidden=256, batch_size=64):
         super(PongDQN, self).__init__()
-        self.inputs = state_space_dim
-        state_space_dim = self.inputs  # batch_size * inputs *hidden
-        self.fc1 = nn.Linear(state_space_dim, hidden)
-        self.fc2 = nn.Linear(hidden, hidden)
-        self.fc3 = nn.Linear(hidden, action_space_dim)
+        self.linear_input_dim = self.linear_input(state_space_dim)
+
+        self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        self.inputs = state_space_dim[0] * state_space_dim[1]
+
+        # state_space_dim[0] (3)
+        self.conv1 = nn.Conv2d(1, hidden, kernel_size=5, stride=1)
+        self.conv2 = nn.Conv2d(hidden, 64, kernel_size=5, stride=1)
+        self.fc1 = torch.nn.Linear(self.linear_input_dim, hidden)
+        self.fc2 = torch.nn.Linear(hidden, action_space_dim)
+        self.initialize()
+
+    def initialize(self):
+        torch.nn.init.xavier_uniform_(self.conv1.weight)
+        torch.nn.init.xavier_uniform_(self.conv2.weight)
+        torch.nn.init.xavier_uniform_(self.fc1.weight)
+        torch.nn.init.xavier_uniform_(self.fc2.weight)
+
+    def linear_input(self, state_space_dim):
+        a = self.conv2d_dims(50, 5, 1)
+        a = self.conv2d_dims(a, 5, 1)
+        b = self.conv2d_dims(50, 5, 1)
+        b = self.conv2d_dims(b, 5, 1)
+        return a * b * 64
+
+    def conv2d_dims(self, input, kernel_size, stride):
+        return (input - (kernel_size - 1) - 1) // stride + 1
 
     def forward(self, x):
-        x = x.view(-1, self.inputs)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = x.view(-1, self.linear_input_dim)
+        x = self.fc1(x)
         x = F.relu(self.fc2(x))
-        return self.fc3(x)
+        return x
 
 
 class DQNAgent(object):
     def __init__(self, env_name, state_space, n_actions, replay_buffer_size,
                  batch_size, hidden_size, gamma):
+        self.device = torch.device("cpu" if torch.cuda.is_available() else "cpu")
+
         self.env_name = env_name
         self.n_actions = n_actions
         self.state_space_dim = state_space
@@ -46,15 +75,9 @@ class DQNAgent(object):
         if len(self.memory) < self.batch_size:
             return
         transitions = self.memory.sample(self.batch_size)
-        # Transpose the batch (see https://stackoverflow.com/a/19343/3343043 for
-        # detailed explanation). This converts batch-array of Transitions
-        # to Transition of batch-arrays.
-        batch = Transition(*zip(*transitions))
 
-        # Compute a mask of non-final states and concatenate the batch elements
-        # (a final state would've been the one after which simulation ended)
+        batch = Transition(*zip(*transitions))
         non_final_mask = 1 - torch.tensor(batch.done, dtype=torch.uint8)
-        non_final_mask = non_final_mask.type(torch.bool)
         non_final_next_states = [s for nonfinal, s in zip(non_final_mask,
                                                           batch.next_state) if nonfinal > 0]
         non_final_next_states = torch.stack(non_final_next_states)
@@ -62,18 +85,12 @@ class DQNAgent(object):
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
 
-        # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
-        # columns of actions taken. These are the actions which would've been taken
-        # for each batch state according to policy_net
-        state_action_values = self.policy_net(state_batch).gather(1, action_batch)
+        state_action_values = self.policy_net(state_batch
+                                              .reshape(-1, 1, 50, 50)).gather(1, action_batch)
 
-        # Compute V(s_{t+1}) for all next states.
-        # Expected values of actions for non_final_next_states are computed based
-        # on the "older" target_net; selecting their best reward with max(1)[0].
-        # This is merged based on the mask, such that we'll have either the expected
-        # state value or 0 in case the state was final.
-        next_state_values = torch.zeros(self.batch_size)
-        next_state_values[non_final_mask] = self.target_net(non_final_next_states).max(1)[0].detach()
+        next_state_values = torch.zeros(self.batch_size).to(self.device)
+        next_state_values[non_final_mask.bool()] = self.target_net(non_final_next_states
+                                                                   .reshape(-1, 1, 50, 50)).max(1)[0].detach()
 
         # Compute the expected Q values
         expected_state_action_values = reward_batch + self.gamma * next_state_values
@@ -108,10 +125,6 @@ class DQNAgent(object):
         next_state = torch.from_numpy(next_state).float()
         state = torch.from_numpy(state).float()
         self.memory.push(state, action, next_state, reward, done)
-
-
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward', 'done'))
 
 
 class ReplayMemory(object):

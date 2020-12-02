@@ -49,25 +49,24 @@ def preprocess(observation, previous_observation=None):
     # plt.colorbar()
     # plt.title("Observation after subtraction of previous image")
     # plt.show()
-    observation = observation.astype(np.float).ravel()
+    observation = observation.astype(np.float)#.ravel()
     return observation, subtract_next
 
 
 def main(args):
     # Create a Gym environment
     env = gym.make(args.env)
-
     TARGET_UPDATE = 4
-    glie_a = 5555
+    glie_a = 3333
     num_episodes = args.train_episodes
-    hidden = 32
+    hidden = 256
     gamma = 0.99
     replay_buffer_size = 50000
-    batch_size = 100
-
+    batch_size = 64
     writer = SummaryWriter()
     n_actions = 3
-    state_space_dim = 50*50
+    state_space_dim = (50, 50)
+    total_timesteps = 0
 
     sys.path.append(args.dir)
     from agents import DQN as model
@@ -85,7 +84,10 @@ def main(args):
         done = False
         eps = glie_a / (glie_a + ep)
         cum_reward = 0
+        timesteps = 0
         while not done:
+            timesteps += 1
+            total_timesteps += 1
             # Select and perform an action
             action = agent.get_action(state, eps)
             next_state, reward, done, _ = env.step(action)
@@ -99,7 +101,7 @@ def main(args):
             # Move to the next state
             state = next_state
 
-        print("Episode:", ep, "Reward: ", cum_reward, " ", "epsilon:", eps)
+        print("Episode:", ep, "Reward: ", cum_reward, "epsilon:", eps, "timesteps:", timesteps)
         cumulative_rewards.append(cum_reward)
         writer.add_scalar('Training ' + "PongEnv", cum_reward, ep)
 
@@ -115,7 +117,7 @@ def main(args):
                        "weights_%s_%d.mdl" % ("PongEnv", ep))
 
     plot_rewards(cumulative_rewards, agent)
-    print('Complete')
+    print('Complete, ran ', total_timesteps, 'timesteps in total')
     plt.ioff()
     plt.show()
 
