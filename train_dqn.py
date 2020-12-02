@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
-from torch.utils.tensorboard import SummaryWriter
+#from torch.utils.tensorboard import SummaryWriter
 
 
 def parse_args(args=sys.argv[1:]):
@@ -64,6 +64,7 @@ def main(args):
     replay_buffer_size = 50000
     batch_size = 64
     writer = SummaryWriter()
+
     n_actions = 3
     state_space_dim = (50, 50)
     total_timesteps = 0
@@ -103,7 +104,7 @@ def main(args):
 
         print("Episode:", ep, "Reward: ", cum_reward, "epsilon:", eps, "timesteps:", timesteps)
         cumulative_rewards.append(cum_reward)
-        writer.add_scalar('Training ' + "PongEnv", cum_reward, ep)
+        #writer.add_scalar('Training ' + "PongEnv", cum_reward, ep)
 
         # Update the target network, copying all weights and biases in DQN
         # Uncomment for Task 4
