@@ -2,6 +2,8 @@ import argparse
 import sys
 import gym
 import wimblepong
+import pickle as pickle
+import copy
 import numpy as np
 import pandas as pd
 import torch
@@ -21,203 +23,209 @@ def parse_args(args=sys.argv[1:]):
 
     return parser.parse_args(args)
 
-# Policy training function
-# def train(policy,agent, print_things=True, train_run_id=0, train_episodes=5000):
-#     # Create a Gym environment
-#     env = gym.make("WimblepongVisualSimpleAI-v0")
-#
-#     # Arrays to keep track of rewards
-#     reward_history, timestep_history = [], []
-#     average_reward_history = []
-#
-#     # Run actual training
-#     for episode_number in range(train_episodes):
-#         reward_sum, timesteps = 0, 0
-#         done = False
-#         # Reset the environment and observe the initial state
-#         observation = env.reset()
-#
-#         # Loop until the episode is over
-#         while not done:
-#             # Get action from the agent
-#             action, action_probabilities = agent.get_action(observation)
-#             previous_observation = observation
-#
-#             # Perform the action on the environment, get new state and reward
-#             observation, reward, done, info = env.step(action.detach().numpy())
-#
-#             # Store action's outcome (so that the agent can improve its policy)
-#             agent.store_outcome(previous_observation, action_probabilities, action, reward)
-#
-#             # Store total episode reward
-#             reward_sum += reward
-#             timesteps += 1
-#
-#         if print_things:
-#             print("Episode {} finished. Total reward: {:.3g} ({} timesteps)"
-#                   .format(episode_number, reward_sum, timesteps))
-#
-#         # Bookkeeping (mainly for generating plots)
-#         reward_history.append(reward_sum)
-#         timestep_history.append(timesteps)
-#         if episode_number > 100:
-#             avg = np.mean(reward_history[-100:])
-#         else:
-#             avg = np.mean(reward_history)
-#         average_reward_history.append(avg)
-#
-#         # Let the agent do its magic (update the policy)
-#         agent.episode_finished(episode_number) # TODO: Update at end of each episode -- DONE
-#
-#     # Training is finished - plot rewards
-#     if print_things:
-#         plt.plot(reward_history)
-#         plt.plot(average_reward_history)
-#         plt.legend(["Reward", "100-episode average"])
-#         plt.title("Reward history")
-#         plt.show()
-#         print("Training finished.")
-#     data = pd.DataFrame({"episode": np.arange(len(reward_history)),
-#                          "train_run_id": [train_run_id]*len(reward_history),
-#                          # TODO: Change algorithm name for plots, if you want -- DONE
-#                          "REINFORCE without baseline": ["PG"]*len(reward_history),
-#                          # "REINFORCE constant baseline": ["PG"]*len(reward_history),
-#                          # "REINFORCE normalized discounted rewards and unit variance": ["PG"]*len(reward_history),
-#                          "reward": reward_history})
-#     torch.save(agent.policy.state_dict(), "model_%s_%d.mdl" % (env_name, train_run_id))
-#     return data
-def train(env, agent, print_things=True, train_run_id=0, train_episodes=5000):
 
-    # Arrays to keep track of rewards
-    reward_history, timestep_history = [], []
-    average_reward_history = []
-
-    # Run actual training
-    for episode_number in range(train_episodes):
-        reward_sum, timesteps = 0, 0
-        done = False
-        # Reset the environment and observe the initial state
-        observation = env.reset()
-
-        # Loop until the episode is over
-        while not done:
-            # Get action from the agent
-            action, action_probabilities = agent.get_action(observation)
-            previous_observation = observation
-
-            # Perform the action on the environment, get new state and reward
-            observation, reward, done, info = env.step(action.detach().numpy())
-
-            # Store action's outcome (so that the agent can improve its policy)
-            agent.store_outcome(previous_observation, action_probabilities, action, reward)
-
-            # Store total episode reward
-            reward_sum += reward
-            timesteps += 1
-
-        if print_things:
-            print("Episode {} finished. Total reward: {:.3g} ({} timesteps)"
-                  .format(episode_number, reward_sum, timesteps))
-
-        # Bookkeeping (mainly for generating plots)
-        reward_history.append(reward_sum)
-        timestep_history.append(timesteps)
-        if episode_number > 100:
-            avg = np.mean(reward_history[-100:])
-        else:
-            avg = np.mean(reward_history)
-        average_reward_history.append(avg)
-
-        # Let the agent do its magic (update the policy)
-        agent.episode_finished(episode_number) # TODO: Update at end of each episode -- DONE
-
-    # Training is finished - plot rewards
-    if print_things:
-        plt.plot(reward_history)
-        plt.plot(average_reward_history)
-        plt.legend(["Reward", "100-episode average"])
-        plt.title("Reward history")
-        plt.show()
-        print("Training finished.")
-    data = pd.DataFrame({"episode": np.arange(len(reward_history)),
-                         "train_run_id": [train_run_id]*len(reward_history),
-                         # TODO: Change algorithm name for plots, if you want -- DONE
-                         "REINFORCE without baseline": ["PG"]*len(reward_history),
-                         # "REINFORCE constant baseline": ["PG"]*len(reward_history),
-                         # "REINFORCE normalized discounted rewards and unit variance": ["PG"]*len(reward_history),
-                         "reward": reward_history})
-    torch.save(agent.policy.state_dict(), "model_%s_%d.mdl" % (env_name, train_run_id))
-    return data
-
-
-# Function to test a trained policy
-# def test(env_name, episodes, params, render):
-#     # Create a Gym environment
-#     env = gym.make(env_name)
-#
-#     # Get dimensionalities of actions and observations
-#     action_space_dim = env.action_space.shape[-1]
-#     observation_space_dim = env.observation_space.shape[-1]
-#
-#     # Instantiate agent and its policy
-#     policy = Policy(observation_space_dim, action_space_dim)
-#     policy.load_state_dict(params)
-#     agent = Agent(policy)
-#
-#     test_reward, test_len = 0, 0
-#     for ep in range(episodes):
-#         done = False
-#         observation = env.reset()
-#         while not done:
-#             # Similar to the training loop above -
-#             # get the action, act on the environment, save total reward
-#             # (evaluation=True makes the agent always return what it thinks to be
-#             # the best action - there is no exploration at this point)
-#             action, _ = agent.get_action(observation, evaluation=True)
-#             observation, reward, done, info = env.step(action.detach().cpu().numpy())
-#
-#             if render:
-#                 env.render()
-#             test_reward += reward
-#             test_len += 1
-#     print("Average test reward:", test_reward/episodes, "episode length:", test_len/episodes)
-
+# Entry point of the script
 def main(args):
-    # Create a Gym environment
-    env = gym.make(args.env)
-
-    action_space_dim = 1
-    # TODO: change when we preprocess the observation
-    sys.path.append(args.dir)
-    from agents import DQN as model
-    from agents.AC import ac_agent as model
-
-    # hyperparameters for REINFORCE
-    batch_size = 10  # every how many episodes to do a param update?
-    learning_rate = 1e-3
+    env = gym.make("WimblepongVisualSimpleAI-v0")
+    # hyperparameters
+    H = 50  # number of hidden layer neurons
+    batch_size = 300  #
+    learning_rate = 1e-4
     gamma = 0.99  # discount factor for reward
     decay_rate = 0.99  # decay factor for RMSProp leaky sum of grad^2
-    resume = False  # resume from previous checkpoint?
-    render = False
-
-    # hyperparameters for ActorCritic
-
     mom_rate = 0.9
     td_step = 30  # initial td step
     gamma_power = [gamma ** i for i in range(td_step + 1)]
     shrink_step = True
     rmsprop = True
-    state_space_dim = 50*50
-    hidden = 32
-    n_actions = 3
+    resume = False  # resume from previous checkpoint?
+    render = False
 
-    # Instantiate agent and its policy
-    policy = model.Policy(state_space_dim, n_actions)
-    agent = model.Agent(policy=policy )
-    train(env,agent=agent)#, batch_size, learning_rate, gamma, decay_rate)#, mom_rate, td_step, gamma_power, shrink_step,  rmsprop, render)
+    # model initialization
+    D = 50 * 50  # input dimensionality: 80x80 grid
+    if resume:
+        model, model_target = pickle.load(open('save.ac', 'rb'))
+    else:
+        model = {}
+        model['W1_policy'] = np.random.randn(H, D) / np.sqrt(D)  # "Xavier" initialization
+        model['b1_policy'] = np.random.randn(H) / np.sqrt(4 * H)
+        model['W2_policy'] = np.random.randn(H) / np.sqrt(H)
+        model['b2_policy'] = 0.0
+        model['W1_value'] = np.random.randn(H, D) / np.sqrt(D)  # "Xavier" initialization
+        model['b1_value'] = np.random.randn(H) / np.sqrt(4 * H)
+        model['W2_value'] = np.random.randn(H) / np.sqrt(H)
+        model['b2_value'] = 0.0
+        model_target = copy.deepcopy(model)
+
+    grad_buffer = {k: np.zeros_like(v) for k, v in model.items()}  # update buffers that add up gradients over a batch
+    momentum = {k: np.zeros_like(v) for k, v in model.items()}
+    rmsprop_cache = {k: np.zeros_like(v) for k, v in model.items()}  # rmsprop memory
+
+    def sigmoid(x):
+        return 1.0 / (1.0 + np.exp(-x))  # sigmoid "squashing" function to interval [0,1]
+
+    def prepro(observation, previous_observation):
+        """ prepro 210x160x3 uint8 frame into 6400 (80x80) 1D float vector """
+        observation = observation[::4, ::4, 0]  # downsample by factor of 4
+        observation[observation == 33] = 0  # erase background
+        observation[(observation == 75) | (observation == 202) | (observation == 255)] = 1
+        # show after color encoding
+        # plt.imshow(observation)
+        # plt.colorbar()
+        # plt.title("Observation after downsampling and color encoding")
+        # plt.show()
+        # memorize the previous state
+        subtract_next = observation
+        previous_observation = np.asarray(previous_observation)
+        if previous_observation.any():
+            observation = observation - 0.5 * previous_observation
+        observation = observation.astype(np.float)
+        # Show after substraction
+        # plt.imshow(observation)
+        # plt.colorbar()
+        # plt.title("Observation after subtraction of previous image")
+        # plt.show()
+        # return I.astype(np.float).ravel()
+        return observation.astype(np.float).ravel()
+
+    def forward(x, modelType, model=model):
+        h = np.dot(model['W1_' + modelType], x) + model['b1_' + modelType]
+        h[h < 0] = 0  # ReLU nonlinearity
+        out = np.dot(model['W2_' + modelType], h) + model['b2_' + modelType]
+        if modelType == 'policy':
+            out = sigmoid(out)
+        return out, h
+
+    def backward(eph, epx, epd, modelType):
+        """ backward pass. (eph is array of intermediate hidden states) """
+        db2 = sum(epd)[0]
+        dW2 = np.dot(eph.T, epd).ravel()
+        dh = np.outer(epd, model['W2_' + modelType])
+        dh[eph <= 0] = 0  # backpro prelu
+        db1 = sum(dh)
+        dW1 = np.dot(dh.T, epx)
+        return {'W1_' + modelType: dW1, 'W2_' + modelType: dW2, 'b1_' + modelType: db1, 'b2_' + modelType: db2}
+
+    env = gym.make("WimblepongVisualSimpleAI-v0")
+    num_episodes = args.train_episodes
+
+    observation = env.reset()
+    prev_x = None  # used in computing the difference frame
+    xs, h_ps, h_vs, dlogps, vs, tvs, dvs = [], [], [], [], [], [], []
+    running_reward = None
+    reward_sum = 0
+    round_number = 0
+    ep = 0
+    cumulative_rewards = []
+    while ep < num_episodes:
+
+        # for ep in range(num_episodes):
+
+        if render: env.render()
+
+        # preprocess the observation, set input to network to be difference image
+        cur_x = prepro(observation, prev_x)
+        # x = cur_x - prev_x if prev_x is not None else np.zeros(D)
+        x = cur_x
+        prev_x = cur_x
+
+        # forward the policy network and sample an action from the returned probability
+        aprob, h_p = forward(x, 'policy')
+        action = 2 if np.random.uniform() < aprob else 3  # roll the dice!
+
+        v, h_v = forward(x, 'value')
+        tv, _ = forward(x, 'value', model_target)
+        # record various intermediates (needed later for backprop)
+        xs.append(x)  # observation
+        h_ps.append(h_p)  # hidden state
+        h_vs.append(h_v)
+        vs.append(v)
+        tvs.append(tv)
+        y = 1 if action == 2 else 0  # a "fake label"
+        dlogps.append(
+            y - aprob)  # grad that encourages the action that was taken to be taken (see http://cs231n.github.io/neural-networks-2/#losses if confused)
+
+        # step the environment and get new measurements
+        observation, reward, done, info = env.step(action)
+        reward_sum += reward
+
+        if reward != 0:
+            round_number += 1
+            if shrink_step and round_number % 10000 == 0:
+                if td_step > 15:
+                    td_step -= 1
+            # calcutate td error
+            dvs = [0] * len(vs)
+            for i in range(len(vs)):
+                if len(vs) - 1 - i < td_step:
+                    dvs[i] = reward * (gamma_power[len(vs) - 1 - i]) - vs[i]
+                else:
+                    dvs[i] = gamma_power[td_step] * tvs[i + td_step] - vs[i]
+
+            # stack together all inputs, hidden states, action gradients, and td for this episode
+            epx = np.vstack(xs)
+            eph_p = np.vstack(h_ps)
+            eph_v = np.vstack(h_vs)
+            epdlogp = np.vstack(dlogps)
+            epv = np.vstack(dvs)
+            xs, h_ps, h_vs, dlogps, vs, tvs, dvs = [], [], [], [], [], [], []  # reset array memory
+
+            # discounted_epv = epv * np.vstack([gamma**i for i in range(len(epv))])
+            epdlogp *= epv  # modulate the gradient with advantage (PG magic happens right here.)
+            grad_p = backward(eph_p, epx, epdlogp, 'policy')
+            grad_v = backward(eph_v, epx, epv, 'value')
+            grad = dict(grad_p, **grad_v)
+
+            for k in model: grad_buffer[k] += grad[k]  # accumulate grad over batch
+
+            if round_number % batch_size == 0:
+                for k, v in model.items():
+                    g = grad_buffer[k]  # gradient
+                    if rmsprop:
+                        rmsprop_cache[k] = decay_rate * rmsprop_cache[k] + (1 - decay_rate) * g ** 2
+                        momentum[k] = mom_rate * momentum[k] + learning_rate * g / (np.sqrt(rmsprop_cache[k]) + 1e-5)
+                    else:
+                        momentum[k] = mom_rate * momentum[k] + learning_rate * g
+                    model[k] += momentum[k]
+                    grad_buffer[k] = np.zeros_like(v)  # reset batch gradient buffer
+
+                    if 'value' in k:
+                        model_target[k] = mom_rate * model_target[k] + (1 - mom_rate) * model[k]
+
+            if round_number % 3000 == 0:
+                pickle.dump((model, model_target), open('save.ac', 'wb'))
+        # boring book-keeping
+        if done:
+            running_reward = reward_sum if running_reward is None else running_reward * 0.99 + reward_sum * 0.01
+            cumulative_rewards.append(reward_sum)
+            print('Episode %d reward total was %.2f running mean: %.6f' % (ep, reward_sum, running_reward))
+            ep += 1
+            reward_sum = 0
+            observation = env.reset()  # reset env
+            prev_x = None
+    plot_rewards(cumulative_rewards)
 
 
-# Entry point of the script
+def plot_rewards(rewards):
+    plt.figure(2)
+    plt.clf()
+    rewards_t = torch.tensor(rewards, dtype=torch.float)
+    plt.title('Training...')
+    plt.xlabel('Episode')
+    plt.ylabel('Cumulative reward')
+    plt.grid(True)
+    plt.plot(rewards_t.numpy())
+    # Take 100 episode averages and plot them too
+    if len(rewards_t) >= 100:
+        means = rewards_t.unfold(0, 100, 1).mean(1).view(-1)
+        means = torch.cat((torch.zeros(99), means))
+        plt.plot(means.numpy())
+
+    plt.pause(0.001)  # pause a bit so that plots are updated
+    plt.savefig('train_plot.png')
+    plt.show()
+
+
 if __name__ == "__main__":
     args = parse_args()
     main(args)
