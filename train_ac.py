@@ -5,6 +5,7 @@ import wimblepong
 import pickle as pickle
 import copy
 import numpy as np
+import PIL.Image as Image
 import pandas as pd
 import torch
 import matplotlib.pyplot as plt
@@ -26,7 +27,6 @@ def parse_args(args=sys.argv[1:]):
 
 # Entry point of the script
 def main(args):
-    env = gym.make("WimblepongVisualSimpleAI-v0")
     # hyperparameters
     H = 50  # number of hidden layer neurons
     batch_size = 300  #
@@ -88,6 +88,7 @@ def main(args):
         # return I.astype(np.float).ravel()
         return observation.astype(np.float).ravel()
 
+
     def forward(x, modelType, model=model):
         h = np.dot(model['W1_' + modelType], x) + model['b1_' + modelType]
         h[h < 0] = 0  # ReLU nonlinearity
@@ -117,6 +118,8 @@ def main(args):
     round_number = 0
     ep = 0
     cumulative_rewards = []
+    start = True
+    frames = np.zeros((50, 50, 4))  # frame nr = 4
     while ep < num_episodes:
 
         # for ep in range(num_episodes):
@@ -124,10 +127,11 @@ def main(args):
         if render: env.render()
 
         # preprocess the observation, set input to network to be difference image
-        cur_x = prepro(observation, prev_x)
-        # x = cur_x - prev_x if prev_x is not None else np.zeros(D)
+        cur_x = prepro(observation, start)  # observation, previous_observation, start,frames, frame_number=4
+        x = cur_x - prev_x if prev_x is not None else np.zeros(D)
+        start = False
         x = cur_x
-        prev_x = cur_x
+        # prev_x = cur_x
 
         # forward the policy network and sample an action from the returned probability
         aprob, h_p = forward(x, 'policy')
@@ -203,10 +207,12 @@ def main(args):
             reward_sum = 0
             observation = env.reset()  # reset env
             prev_x = None
-    plot_rewards(cumulative_rewards)
+            if ep == 10000 or ep == 20000 or ep == 35000 or ep == 55000 or ep == 75000 or ep == 90000:
+                plot_rewards(cumulative_rewards)
+    plot_rewards(cumulative_rewards, 0)
 
 
-def plot_rewards(rewards):
+def plot_rewards(rewards, index):
     plt.figure(2)
     plt.clf()
     rewards_t = torch.tensor(rewards, dtype=torch.float)
@@ -221,8 +227,10 @@ def plot_rewards(rewards):
         means = torch.cat((torch.zeros(99), means))
         plt.plot(means.numpy())
 
-    plt.pause(0.001)  # pause a bit so that plots are updated
-    plt.savefig('train_plot.png')
+    # plt.savefig('train_plot_%.png')
+    # plt.savefig('train_plot_' + index + '.png')
+    plt.savefig('train_plot_train_ac_{}.png'.format(index), format='png')
+
     plt.show()
 
 
