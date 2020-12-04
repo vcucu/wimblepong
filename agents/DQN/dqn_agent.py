@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-import matplotlib.pyplot as plt
 import random
 
 Transition = namedtuple('Transition',
@@ -29,14 +28,6 @@ class PongDQN(nn.Module):
         for l in my_layers:
             l.to(self.device)
         print("NN device", self.device)
-        self.initialize()
-
-    def initialize(self):
-        torch.nn.init.kaiming_normal_(self.conv1.weight)
-        torch.nn.init.kaiming_normal_(self.conv2.weight)
-        torch.nn.init.kaiming_normal_(self.conv3.weight)
-        torch.nn.init.kaiming_normal_(self.fc1.weight)
-        torch.nn.init.kaiming_normal_(self.fc2.weight)
 
     def linear_input(self, state_space_dim):
         a = self.conv2d_dims(50, 8, 4)
@@ -62,29 +53,23 @@ class PongDQN(nn.Module):
 
 class DQNAgent(object):
     def __init__(self):
+
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.name = "AVe"  # A-letta & Ve-ronika hehe
         self.n_actions = 3
         self.state_space = (50, 50)
-        self.batch_size = 128
-        self.hidden = 16
+        self.batch_size = 100
+        self.hidden = 32
         self.policy_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
         self.target_net = PongDQN(self.state_space, self.n_actions, self.hidden, self.batch_size)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
-        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=1e-4)
+        self.optimizer = optim.Adam(self.policy_net.parameters(), lr=5e-4)
         self.memory = ReplayMemory(50000)
         self.gamma = 0.99
         self.prev_1 = np.zeros((50, 50))
         self.prev_2 = np.zeros((50, 50))
         print("Agent device", self.device)
-
-    def get_name(self):
-        return self.name
-
-    def reset(self):
-        self.prev_1 = np.zeros((50, 50))
-        self.prev_2 = np.zeros((50, 50))
 
     def update_network(self, updates=1):
         for _ in range(updates):
@@ -119,12 +104,13 @@ class DQNAgent(object):
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        for param in self.policy_net.parameters():
-            param.grad.data.clamp_(-1e-1, 1e-1)
+        # for param in self.policy_net.parameters():
+        #    param.grad.data.clamp_(-1e-1, 1e-1)
         self.optimizer.step()
 
     def get_action(self, state, epsilon=-1):
-        state, _ = self.preprocess(state)
+
+        state, _ = self.preprocess(observation=state)
         sample = random.random()
         if sample > epsilon:
             with torch.no_grad():
@@ -153,15 +139,20 @@ class DQNAgent(object):
 
         observation = observation[::4, ::4, 0]  # downsample by factor of 4
         observation[observation == 33] = 0  # erase background
-        observation[(observation == 75) | (observation == 202) | (observation == 255)] = 1
+        observation[(observation == 75) | (observation == 202)] = 1
+        observation[(observation == 255)] = 2
 
         if prev_1 is None:
             prev_1 = self.prev_1
         if prev_2 is None:
             prev_2 = self.prev_2
 
-        stacked = np.concatenate((self.prev_1, self.prev_2, observation), axis=-1)
-        stacked = torch.from_numpy(stacked).float().unsqueeze(0).to(self.device)
+        observation = observation.reshape(50, 50, 1)
+        prev_1 = prev_1.reshape(50, 50, 1)
+        prev_2 = prev_2.reshape(50, 50, 1)
+
+        stacked = np.concatenate((prev_1, prev_2, observation), axis=-1)
+        stacked = torch.from_numpy(stacked).float().to(self.device)
 
         return stacked, observation
 
