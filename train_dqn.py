@@ -26,7 +26,7 @@ def main(args):
     # Create a Gym environment
     env = gym.make(args.env)
     TARGET_UPDATE = 4
-    glie_a = 5555
+    glie_a = 6666
     num_episodes = args.train_episodes
     total_timesteps = 0
     sys.path.append(args.dir)
@@ -45,22 +45,18 @@ def main(args):
         while not done:
             timesteps += 1
             total_timesteps += 1
-
             # Select and perform an action
             action = agent.get_action(state, eps)
             next_state, reward, done, _ = env.step(action)
             cum_reward += reward
-
             # Update the DQN
             agent.store_transition(state, action, next_state, reward, done)
             #net_update_start = time.time()
             agent.update_network()
             #net_update_end = time.time()
             #print("This network update took", net_update_end - net_update_start)
-
             # Move to the next state
             state = next_state
-
         #end = time.time()
         #print("This episode took", end - start)
 
