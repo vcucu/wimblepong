@@ -18,25 +18,22 @@ class PongDQN(nn.Module):
         self.linear_input_dim = self.linear_input(state_space_dim)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.inputs = state_space_dim[0] * state_space_dim[1]
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=4, stride=2)
-        self.conv3 = nn.Conv2d(64, 32, kernel_size=3, stride=1)
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=8, stride=2)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2)
         self.fc1 = torch.nn.Linear(self.linear_input_dim, hidden)
         self.fc2 = torch.nn.Linear(hidden, action_space_dim)
         self.initialize()
-        my_layers = [self.conv1, self.conv2, self.conv3, self.fc1, self.fc2]
+        my_layers = [self.conv1, self.conv2, self.fc1, self.fc2]
         for l in my_layers:
             l.to(self.device)
         print("NN device", self.device)
 
     def linear_input(self, state_space_dim):
-        a = self.conv2d_dims(50, 8, 4)
-        a = self.conv2d_dims(a, 4, 2)
-        a = self.conv2d_dims(a, 3, 1)
+        a = self.conv2d_dims(50, 8, 2)
+        a = self.conv2d_dims(a, 3, 2)
 
-        b = self.conv2d_dims(50, 8, 4)
-        b = self.conv2d_dims(b, 4, 2)
-        b = self.conv2d_dims(b, 3, 1)
+        b = self.conv2d_dims(50, 8, 2)
+        b = self.conv2d_dims(b, 3, 2)
         return a * b * 32
 
     def conv2d_dims(self, input, kernel_size, stride):
@@ -45,7 +42,6 @@ class PongDQN(nn.Module):
     def forward(self, x):
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
         x = x.view(-1, self.linear_input_dim)
         x = self.fc1(x)
         x = self.fc2(x)
@@ -54,12 +50,11 @@ class PongDQN(nn.Module):
     def initialize(self):
         torch.nn.init.kaiming_normal_(self.conv1.weight)
         torch.nn.init.kaiming_normal_(self.conv2.weight)
-        torch.nn.init.kaiming_normal_(self.conv3.weight)
         torch.nn.init.kaiming_normal_(self.fc1.weight)
         torch.nn.init.kaiming_normal_(self.fc2.weight)
 
 
-class DQNAgent(object):
+class DQNAgentG(object):
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.name = "AVe"  # A-letta & Ve-ronika hehe
@@ -123,14 +118,13 @@ class DQNAgent(object):
                 state = torch.reshape(state, (-1, 3, 50, 50))
                 # state = torch.from_numpy(state.reshape(-1, 3, 50, 50)).float()
                 q_values = self.policy_net(state)
-                #print(q_values)
+                # print(q_values)
                 action = torch.argmax(q_values).item()
-                #print("Choosing", action)
+                # print("Choosing", action)
                 return action
         else:
             action = random.randrange(self.n_actions)
             return action
-
 
     def update_target_network(self):
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -144,14 +138,14 @@ class DQNAgent(object):
         self.prev_2 = self.prev_1
         self.prev_1 = state
 
-        self.memory.push(stacked_state, action, stacked_next_state, reward/10, done)
+        self.memory.push(stacked_state, action, stacked_next_state, reward / 10, done)
 
     def preprocess(self, observation, prev_1=None, prev_2=None):
 
-        #observation = observation[::4, ::4, 0]  # downsample by factor of 4
-        #observation[observation == 33] = 0  # erase background
-        #observation[(observation == 75) | (observation == 202)] = 1
-        #observation[(observation == 255)] = 2
+        # observation = observation[::4, ::4, 0]  # downsample by factor of 4
+        # observation[observation == 33] = 0  # erase background
+        # observation[(observation == 75) | (observation == 202)] = 1
+        # observation[(observation == 255)] = 2
 
         observation = cv2.resize(observation, (int(50), int(50))).mean(axis=-1)
         observation[observation < 50] = 0  # erase background
@@ -159,12 +153,12 @@ class DQNAgent(object):
         observation[(observation != 0) & (observation != 2)] = 1
 
         # convert the background in black and the players and the paddle in white
-        #observation[observation == 33] = 0  # erase background
-        #observation[(observation == 75) | (observation == 202)] = 1
-        #observation[(observation == 255)] = 2
+        # observation[observation == 33] = 0  # erase background
+        # observation[(observation == 75) | (observation == 202)] = 1
+        # observation[(observation == 255)] = 2
 
-        #observation = np.array(observation)
-        #observation = cv2.resize(observation, (int(50), int(50))).mean(axis=-1)
+        # observation = np.array(observation)
+        # observation = cv2.resize(observation, (int(50), int(50))).mean(axis=-1)
 
         if prev_1 is None:
             prev_1 = observation

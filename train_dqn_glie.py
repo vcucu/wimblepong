@@ -26,7 +26,7 @@ def main(args):
     # Create a Gym environment
     env = gym.make(args.env)
     TARGET_UPDATE = 4
-    glie_a = 6666
+    glie_a = 4200
     num_episodes = args.train_episodes
     total_timesteps = 0
     sys.path.append(args.dir)
