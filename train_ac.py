@@ -208,7 +208,7 @@ def main(args):
             observation = env.reset()  # reset env
             prev_x = None
             if ep == 10000 or ep == 20000 or ep == 35000 or ep == 55000 or ep == 75000 or ep == 90000:
-                plot_rewards(cumulative_rewards)
+                plot_rewards(cumulative_rewards, ep)
     plot_rewards(cumulative_rewards, 0)
 
 
